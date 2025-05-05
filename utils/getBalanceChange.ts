@@ -23,5 +23,5 @@ export function balanceChanges(tx: VersionedTransactionResponse, mint: string, p
     }
   }
 
-  return Math.abs(postTokenBal - preTokenBal);
+  return postTokenBal - preTokenBal;
 }
