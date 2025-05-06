@@ -40,28 +40,45 @@ export class SolanaEventParser {
     this.eventDecoders.delete(programId);
   }
 
-  parseEvent(txn: VersionedTransactionResponse | ParsedTransactionWithMeta) {
+  parseEvent(txn: VersionedTransactionResponse) {
     try {
       let programIds: string[] = [];
       if (
         txn?.transaction.message instanceof Message ||
         txn?.transaction.message instanceof MessageV0
       ) {
-        const accountKeys = txn.transaction.message.staticAccountKeys;
+        // const accountKeys = txn.transaction.message.staticAccountKeys;
+
+        const accountKeys = [
+          ...(txn.transaction.message.staticAccountKeys?.map((key) =>
+            key.toBase58()
+          ) || []),
+          ...(txn.meta?.loadedAddresses?.writable.map((key) =>
+            key.toBase58()
+          ) || []),
+          ...(txn.meta?.loadedAddresses?.readonly.map((key) =>
+            key.toBase58()
+          ) || []),
+        ];
+
         txn.transaction.message.compiledInstructions.forEach((instruction) => {
           const programId = accountKeys[instruction.programIdIndex];
           if (programId) {
-            programIds.push(programId.toBase58());
+            programIds.push(programId);
           }
         });
-      } else {
-        txn.transaction.message.instructions.forEach((instruction) => {
-          programIds.push(instruction.programId.toBase58());
-        });
+
+        const swapInnerInstructions = txn.meta?.innerInstructions
+          ?.map((ix) => ix.instructions)
+          .flat()
+          .forEach((ix) => {
+            programIds.push(accountKeys[ix.programIdIndex]);
+          });
       }
       const availableProgramIds = Array.from(this.eventDecoders.keys()).map(
         (programId) => programId.toString()
       );
+
       const commonProgramIds = intersection(availableProgramIds, programIds);
       if (commonProgramIds.length) {
         const events: any[] = [];
@@ -85,6 +102,7 @@ export class SolanaEventParser {
         return [];
       }
     } catch (e) {
+      console.log(e);
       return [];
     }
   }
