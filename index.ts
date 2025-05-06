@@ -36,11 +36,11 @@ interface SubscribeRequest {
 }
 
 const SPECFIED_TOKEN = new PublicKey(
-  '86qGKBNwxJjijTakNcXw5bcffd2EtzfPjtxVVRxCpump'
+  '8ncucXv6U6epZKHPbgaEBcEK399TpHGKCquSt4RnmX4f'
 );
 
 const POOL_ADDRESS = new PublicKey(
-  'FJcBDZJUD6LhsURZsa3aJjLUtV2PvFociBPZfjQxaS7K'
+  '6WwcmiRJFPDNdFmtgVQ8eY1zxMzLKGLrYuUtRy4iZmye'
 );
 
 const OPEN_BOOK_PROGRAM_ID = new PublicKey(
