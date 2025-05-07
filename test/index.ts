@@ -44,11 +44,11 @@ interface SubscribeRequest {
   ping?: SubscribeRequestPing | undefined;
 }
 const SPECFIED_TOKEN = new PublicKey(
-  'C3DwDjT17gDvvCYC2nsdGHxDHVmQRdhKfpAdqQ29pump'
+  '8xhH7tDB6m1akaexEYsn8Qkb58r6EY8MA4t958mipump'
 );
 
 const POOL_ADDRESS = new PublicKey(
-  'D6Rgz1JG2syjsTXGaSAZ39cLffWL4TfabEAAnJHGRrZC'
+  '3gBqc6pZVgd3uTNg1KE7JXxTiNVMFoRqSbQF8BSLpk7w'
 );
 
 const OPEN_BOOK_PROGRAM_ID = new PublicKey(
@@ -94,7 +94,7 @@ PUMP_FUN_EVENT_PARSER.addParserFromIdl(
 // Handle updates
 async function handleStream() {
   const txn = await connection.getTransaction(
-    '64RakHcGiShXKT6pjtAwkuAKHUeBYJKsuZRxQ1wRWRm74vjbkBKmix11Cx7WdXR1EBi8zALNZeQeHKXejx7n8Xdy',
+    '2Gnn4nBg1chnq75mEYAL8LESjb3sRLzm9EPtYcY9S54TeyShdQnuWeM1Lb6ZwSLgfmkrvXbvPCrrgYdXNeeSvmct',
     {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0,
@@ -187,7 +187,9 @@ async function handleStream() {
             getPrice('So11111111111111111111111111111111111111112').then(
               (value) => {
                 if (event.name === 'SellEvent') {
-                  const quoteAmount = event.data.min_quote_amount_out / 10 ** 9;
+                  const quoteAmount = event.data.quote_amount_out / 10 ** 9;
+                  console.log(event.data.quote_amount_out);
+
                   console.log(
                     event.name,
                     event.data.base_amount_in / 10 ** 6,

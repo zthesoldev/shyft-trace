@@ -42,11 +42,11 @@ interface SubscribeRequest {
   ping?: SubscribeRequestPing | undefined;
 }
 const SPECFIED_TOKEN = new PublicKey(
-  'C3DwDjT17gDvvCYC2nsdGHxDHVmQRdhKfpAdqQ29pump'
+  '8xhH7tDB6m1akaexEYsn8Qkb58r6EY8MA4t958mipump'
 );
 
 const POOL_ADDRESS = new PublicKey(
-  'D6Rgz1JG2syjsTXGaSAZ39cLffWL4TfabEAAnJHGRrZC'
+  '3gBqc6pZVgd3uTNg1KE7JXxTiNVMFoRqSbQF8BSLpk7w'
 );
 
 const OPEN_BOOK_PROGRAM_ID = new PublicKey(
@@ -195,8 +195,7 @@ async function handleStream(client: Client, args: SubscribeRequest) {
               getPrice('So11111111111111111111111111111111111111112').then(
                 (value) => {
                   if (event.name === 'SellEvent') {
-                    const quoteAmount =
-                      event.data.min_quote_amount_out / 10 ** 9;
+                    const quoteAmount = event.data.quote_amount_out / 10 ** 9;
                     console.log(
                       event.name,
                       event.data.base_amount_in / 10 ** 6,
