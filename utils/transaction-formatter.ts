@@ -135,7 +135,7 @@ export class TransactionFormatter {
                 ) || [],
               readonly:
                 meta.loadedReadonlyAddresses?.map(
-                  (address: PublicKey) => address
+                  (address: Buffer) => new PublicKey(address)
                 ) || [],
             }
           : undefined,

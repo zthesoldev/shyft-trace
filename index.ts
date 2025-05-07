@@ -10,17 +10,24 @@ import Client, {
   SubscribeRequestFilterTransactions,
 } from '@triton-one/yellowstone-grpc';
 import {
+  Message,
+  MessageV0,
+  ParsedTransactionWithMeta,
   PublicKey,
+  VersionedTransactionResponse,
 } from '@solana/web3.js';
 import { Idl, Program, Provider } from '@coral-xyz/anchor';
 import { SolanaParser } from '@shyft-to/solana-transaction-parser';
 import { SubscribeRequestPing } from '@triton-one/yellowstone-grpc/dist/types/grpc/geyser';
 import { TransactionFormatter } from './utils/transaction-formatter';
 import { SolanaEventParser } from './utils/event-parser';
+import { bnLayoutFormatter } from './utils/bn-layout-formatter';
 import pumpFunAmmIdl from './idls/pump_amm_0.1.0.json';
 import jupyterIdl from './idls/idl.json';
+import { getEvents } from './utils/get-events';
 import { Jupiter, jupiterIdl } from './idls/jup';
-import { balanceChanges } from './utils/getBalanceChange';
+import { getPrice } from './utils/get-price';
+import { logToFile } from './utils/file-logger';
 
 interface SubscribeRequest {
   accounts: { [key: string]: SubscribeRequestFilterAccounts };
@@ -34,13 +41,12 @@ interface SubscribeRequest {
   accountsDataSlice: SubscribeRequestAccountsDataSlice[];
   ping?: SubscribeRequestPing | undefined;
 }
-
 const SPECFIED_TOKEN = new PublicKey(
-  '8ncucXv6U6epZKHPbgaEBcEK399TpHGKCquSt4RnmX4f'
+  '8xhH7tDB6m1akaexEYsn8Qkb58r6EY8MA4t958mipump'
 );
 
 const POOL_ADDRESS = new PublicKey(
-  '6WwcmiRJFPDNdFmtgVQ8eY1zxMzLKGLrYuUtRy4iZmye'
+  '3gBqc6pZVgd3uTNg1KE7JXxTiNVMFoRqSbQF8BSLpk7w'
 );
 
 const OPEN_BOOK_PROGRAM_ID = new PublicKey(
@@ -109,46 +115,131 @@ async function handleStream(client: Client, args: SubscribeRequest) {
         data.transaction,
         Date.now()
       );
-      const logMessages = txn.meta?.logMessages || [];
-      if (logMessages.length > 0) {
-        let sell = false;
-        let buy = false;
-        for (let log of logMessages) {
-          if (log.includes('Instruction: Swap')) {
-            sell = false;
-            buy = false;
-            break;
-          }
-          if (log.includes('Instruction: Sell')) {
-            if (buy) {
-              buy = false;
-              break;
-            }
-            sell = true;
-          }
-          if (log.includes('Instruction: Buy')) {
-            if (sell) {
-              sell = false;
-              break;
-            }
-            buy = true;
-          }
-        }
-        if (buy) {
-          console.log(`https://solscan.io/tx/${txn.transaction.signatures[0]}`);
-          const solChanges = balanceChanges(txn, 'So11111111111111111111111111111111111111112', POOL_ADDRESS.toBase58());
-          // const tokenChanges = balanceChanges(txn, SPECFIED_TOKEN.toBase58(), POOL_ADDRESS.toBase58());
+      logToFile('txn', txn.transaction.signatures[0]);
+      const determineValue = isTransactionFromPool(txn);
+      // let parsedTxn = decodeJupyterTxn(txn);
+      if (txn) {
+        if (determineValue.JUPITER) {
+          const events = getEvents(program, txn);
+          // const tokenTransfers = parseTokenTransfers(txn);
+          // console.log('tokenTransfers', tokenTransfers);
+          let swapEvents = events.filter((e) => e.name === 'swapEvent');
 
-          // console.log(`[BUY] => SOL: ${solChanges} | TOKEN: ${tokenChanges}`);
-          console.log(`[BUY] => SOL: ${solChanges}`);
-        }
-        if (sell) {
-          console.log(`https://solscan.io/tx/${txn.transaction.signatures[0]}`);
-          const solChanges = balanceChanges(txn, 'So11111111111111111111111111111111111111112', POOL_ADDRESS.toBase58());
+          const sellEvents = swapEvents
+            .map((e) => {
+              bnLayoutFormatter(e);
+              return e;
+            })
+            .filter((e) => e.data.inputMint === SPECFIED_TOKEN.toBase58());
 
-          // console.log(`[Sell] => TOKEN: ${tokenChanges} | SOL: ${solChanges}`);
-          console.log(`[Sell] => SOL: ${solChanges}`);
+          if (sellEvents.length > 0) {
+            for (let event of sellEvents) {
+              getPrice(event.data.outputMint).then((value) => {
+                let decimals = 6;
+                if (value.symbol == 'SOL') {
+                  decimals = 9;
+                }
+                console.log(
+                  'Jupiter SellEvent',
+                  event.data.inputAmount / 10 ** 6,
+                  `(${value.symbol}):`,
+                  event.data.outputAmount / 10 ** decimals,
+                  'usd:',
+                  (value.maxPrice * event.data.outputAmount) / 10 ** decimals
+                );
+                console.log(
+                  new Date(),
+                  ':',
+                  `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+                );
+              });
+            }
+          }
+
+          const buyEvents = swapEvents
+            .map((e) => {
+              bnLayoutFormatter(e);
+              return e;
+            })
+            .filter((e) => e.data.outputMint === SPECFIED_TOKEN.toBase58());
+
+          if (buyEvents.length > 0) {
+            for (let event of buyEvents) {
+              getPrice(event.data.inputMint).then((value) => {
+                let decimals = 6;
+                if (value.symbol == 'SOL') {
+                  decimals = 9;
+                }
+                console.log(
+                  'Jupiter BuyEvent',
+                  event.data.outputAmount / 10 ** 6,
+                  `(${value.symbol}):`,
+                  event.data.inputAmount / 10 ** decimals,
+                  'usd:',
+                  (value.maxPrice * event.data.inputAmount) / 10 ** decimals
+                );
+                console.log(
+                  new Date(),
+                  ':',
+                  `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+                );
+              });
+            }
+          }
         }
+        if (determineValue.PUMP_FUN) {
+          let parsedTxn = decodePumpFunTxn(txn);
+          if (parsedTxn && parsedTxn.events.length > 0) {
+            // logToFile('parsedTxn', parsedTxn.events);
+            for (let event of parsedTxn.events) {
+              getPrice('So11111111111111111111111111111111111111112').then(
+                (value) => {
+                  if (event.name === 'SellEvent') {
+                    const quoteAmount = event.data.quote_amount_out / 10 ** 9;
+                    console.log(
+                      event.name,
+                      event.data.base_amount_in / 10 ** 6,
+                      'sol:',
+                      quoteAmount,
+                      'usd:',
+                      value.maxPrice * quoteAmount
+                    );
+                  } else {
+                    const quoteAmount = event.data.quote_amount_in / 10 ** 9;
+                    console.log(
+                      event.name,
+                      event.data.base_amount_out / 10 ** 6,
+                      'sol:',
+                      quoteAmount,
+                      'usd:',
+                      value.maxPrice * quoteAmount
+                    );
+                  }
+                  console.log(
+                    new Date(),
+                    ':',
+                    `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+                  );
+                }
+              );
+            }
+          }
+        }
+
+        // const tokenChanges = parseTokenChanges(txn);
+
+        // const formattedTokenChanges = tokenChanges.filter(
+        //   (t) => t.mint === SPECFIED_TOKEN.toBase58()
+        // );
+        // if (formattedTokenChanges.length > 0) {
+        //   logToFile('formattedTokenChanges', formattedTokenChanges);
+        // }
+
+        // logToFile(
+        //   new Date(),
+        //   ':',
+        //   `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+        // );
       }
     }
   });
@@ -175,7 +266,7 @@ async function subscribeCommand(client: Client, args: SubscribeRequest) {
     try {
       await handleStream(client, args);
     } catch (error) {
-      console.error('Stream error, restarting in 1 second...', error);
+      console.log('Stream error, restarting in 1 second...', error);
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
@@ -183,7 +274,7 @@ async function subscribeCommand(client: Client, args: SubscribeRequest) {
 
 const client = new Client(
   process.env.ENDPOINT!,
-  undefined,
+  process.env.X_TOKEN,
   undefined
 );
 
@@ -195,10 +286,12 @@ const req: SubscribeRequest = {
       vote: false,
       failed: false,
       accountInclude: [
-        PUMP_FUN_AMM_PROGRAM_ID.toBase58(),
+        // // PUMP_FUN_AMM_PROGRAM_ID.toBase58(),
+        // // JUPYTER_PROGRAM_ID.toBase58(),
+        // // OPEN_BOOK_PROGRAM_ID.toBase58(),
       ],
       accountExclude: [],
-      accountRequired: [SPECFIED_TOKEN.toBase58(), POOL_ADDRESS.toBase58()],
+      accountRequired: [POOL_ADDRESS.toBase58(), SPECFIED_TOKEN.toBase58()],
     },
   },
   transactionsStatus: {},
@@ -212,3 +305,102 @@ const req: SubscribeRequest = {
 
 subscribeCommand(client, req);
 
+function decodePumpFunTxn(tx: VersionedTransactionResponse) {
+  if (tx.meta?.err) return;
+  //   console.log(JSON.stringify(JSON.stringify(tx)));
+  const paredIxs = PUMP_FUN_IX_PARSER.parseTransactionData(
+    tx.transaction.message,
+    tx.meta.loadedAddresses
+  );
+
+  const pumpFunIxs = paredIxs;
+  if (pumpFunIxs.length === 0) return;
+  const events = PUMP_FUN_EVENT_PARSER.parseEvent(tx);
+  const result = { instructions: pumpFunIxs, events };
+  bnLayoutFormatter(result);
+  return result;
+}
+
+function isTransactionFromPool(
+  txn: VersionedTransactionResponse | ParsedTransactionWithMeta
+) {
+  let returnValue = {
+    JUPITER: false,
+    PUMP_FUN: false,
+    OPEN_BOOK: false,
+  };
+  let programIds: string[] = [];
+
+  if (
+    txn?.transaction.message instanceof Message ||
+    txn?.transaction.message instanceof MessageV0
+  ) {
+    const accountKeys = txn.transaction.message.staticAccountKeys;
+    txn.transaction.message.compiledInstructions.forEach((instruction) => {
+      const programId = accountKeys[instruction.programIdIndex];
+      if (programId) {
+        programIds.push(programId.toBase58());
+      }
+    });
+    programIds.push(
+      ...txn.transaction.message.staticAccountKeys.map((v) => v.toBase58())
+    );
+  } else {
+    txn.transaction.message.instructions.forEach((instruction) => {
+      programIds.push(instruction.programId.toBase58());
+    });
+  }
+  const lookupAddresses = [];
+  // Check for loaded addresses and add them to programIds
+  if (txn.meta?.loadedAddresses) {
+    if (txn.meta.loadedAddresses.writable) {
+      txn.meta.loadedAddresses.writable.forEach((address) => {
+        if (address) {
+          programIds.push(address.toBase58());
+          lookupAddresses.push(address.toBase58());
+        }
+      });
+    }
+    if (txn.meta.loadedAddresses.readonly) {
+      txn.meta.loadedAddresses.readonly.forEach((address) => {
+        if (address) {
+          const read = new PublicKey(address);
+          programIds.push(read.toBase58());
+          lookupAddresses.push(read.toBase58());
+        }
+      });
+    }
+  }
+  if (lookupAddresses.includes(SPECFIED_TOKEN.toBase58())) {
+  }
+  if (programIds.includes(JUPYTER_PROGRAM_ID.toBase58())) {
+    returnValue.JUPITER = true;
+  }
+  if (programIds.includes(PUMP_FUN_AMM_PROGRAM_ID.toBase58())) {
+    returnValue.PUMP_FUN = true;
+  }
+  if (programIds.includes(OPEN_BOOK_PROGRAM_ID.toBase58())) {
+    returnValue.OPEN_BOOK = true;
+  }
+  // console.log('returnValue', returnValue);
+  return returnValue;
+}
+
+function decodeJupyterTxn(tx: VersionedTransactionResponse) {
+  if (tx.meta?.err) return;
+
+  const jupyterIxs = JUPYTER_IX_PARSER.parseTransactionData(
+    tx.transaction.message,
+    tx.meta.loadedAddresses
+  );
+
+  const parsedIxs = jupyterIxs.filter((ix) =>
+    ix.programId.equals(JUPYTER_PROGRAM_ID)
+  );
+
+  if (parsedIxs.length === 0) return;
+  // const jupyterEvents = JUPYTER_EVENT_PARSER.parseEvent(tx);
+  const result = { instructions: parsedIxs };
+  bnLayoutFormatter(result);
+  return result;
+}
