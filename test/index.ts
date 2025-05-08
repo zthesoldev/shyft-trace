@@ -44,11 +44,11 @@ interface SubscribeRequest {
   ping?: SubscribeRequestPing | undefined;
 }
 const SPECFIED_TOKEN = new PublicKey(
-  '8xhH7tDB6m1akaexEYsn8Qkb58r6EY8MA4t958mipump'
+  'DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump'
 );
 
 const POOL_ADDRESS = new PublicKey(
-  '3gBqc6pZVgd3uTNg1KE7JXxTiNVMFoRqSbQF8BSLpk7w'
+  'Gj5t6KjTw3gWW7SrMHEi1ojCkaYHyvLwb17gktf96HNH'
 );
 
 const OPEN_BOOK_PROGRAM_ID = new PublicKey(
@@ -94,7 +94,7 @@ PUMP_FUN_EVENT_PARSER.addParserFromIdl(
 // Handle updates
 async function handleStream() {
   const txn = await connection.getTransaction(
-    '2Gnn4nBg1chnq75mEYAL8LESjb3sRLzm9EPtYcY9S54TeyShdQnuWeM1Lb6ZwSLgfmkrvXbvPCrrgYdXNeeSvmct',
+    'UP4AQc2M8Di8v75ZaaftfkjaN6kTAg2Lhui5GhxyA2F5qRq8LZjfmJMUXmMCpPi9pYqJcpKDpEj9MzVrhLBaL1r',
     {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0,

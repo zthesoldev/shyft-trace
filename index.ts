@@ -134,25 +134,29 @@ async function handleStream(client: Client, args: SubscribeRequest) {
 
           if (sellEvents.length > 0) {
             for (let event of sellEvents) {
-              getPrice(event.data.outputMint).then((value) => {
-                let decimals = 6;
-                if (value.symbol == 'SOL') {
-                  decimals = 9;
-                }
-                console.log(
-                  'Jupiter SellEvent',
-                  event.data.inputAmount / 10 ** 6,
-                  `(${value.symbol}):`,
-                  event.data.outputAmount / 10 ** decimals,
-                  'usd:',
-                  (value.maxPrice * event.data.outputAmount) / 10 ** decimals
-                );
-                console.log(
-                  new Date(),
-                  ':',
-                  `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
-                );
-              });
+              getPrice(event.data.outputMint)
+                .then((value) => {
+                  let decimals = 6;
+                  if (value.symbol == 'SOL') {
+                    decimals = 9;
+                  }
+                  console.log(
+                    'Jupiter SellEvent',
+                    event.data.inputAmount / 10 ** 6,
+                    `(${value.symbol}):`,
+                    event.data.outputAmount / 10 ** decimals,
+                    'usd:',
+                    (value.maxPrice * event.data.outputAmount) / 10 ** decimals
+                  );
+                  console.log(
+                    new Date(),
+                    ':',
+                    `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+                  );
+                })
+                .catch((err) => {
+                  console.log(err);
+                });
             }
           }
 
@@ -165,25 +169,27 @@ async function handleStream(client: Client, args: SubscribeRequest) {
 
           if (buyEvents.length > 0) {
             for (let event of buyEvents) {
-              getPrice(event.data.inputMint).then((value) => {
-                let decimals = 6;
-                if (value.symbol == 'SOL') {
-                  decimals = 9;
-                }
-                console.log(
-                  'Jupiter BuyEvent',
-                  event.data.outputAmount / 10 ** 6,
-                  `(${value.symbol}):`,
-                  event.data.inputAmount / 10 ** decimals,
-                  'usd:',
-                  (value.maxPrice * event.data.inputAmount) / 10 ** decimals
-                );
-                console.log(
-                  new Date(),
-                  ':',
-                  `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
-                );
-              });
+              getPrice(event.data.inputMint)
+                .then((value) => {
+                  let decimals = 6;
+                  if (value.symbol == 'SOL') {
+                    decimals = 9;
+                  }
+                  console.log(
+                    'Jupiter BuyEvent',
+                    event.data.outputAmount / 10 ** 6,
+                    `(${value.symbol}):`,
+                    event.data.inputAmount / 10 ** decimals,
+                    'usd:',
+                    (value.maxPrice * event.data.inputAmount) / 10 ** decimals
+                  );
+                  console.log(
+                    new Date(),
+                    ':',
+                    `New transaction https://solscan.io/tx/${txn.transaction.signatures[0]} \n`
+                  );
+                })
+                .catch((err) => console.log(err));
             }
           }
         }
@@ -307,16 +313,8 @@ subscribeCommand(client, req);
 
 function decodePumpFunTxn(tx: VersionedTransactionResponse) {
   if (tx.meta?.err) return;
-  //   console.log(JSON.stringify(JSON.stringify(tx)));
-  const paredIxs = PUMP_FUN_IX_PARSER.parseTransactionData(
-    tx.transaction.message,
-    tx.meta.loadedAddresses
-  );
-
-  const pumpFunIxs = paredIxs;
-  if (pumpFunIxs.length === 0) return;
   const events = PUMP_FUN_EVENT_PARSER.parseEvent(tx);
-  const result = { instructions: pumpFunIxs, events };
+  const result = { events };
   bnLayoutFormatter(result);
   return result;
 }
@@ -384,23 +382,4 @@ function isTransactionFromPool(
   }
   // console.log('returnValue', returnValue);
   return returnValue;
-}
-
-function decodeJupyterTxn(tx: VersionedTransactionResponse) {
-  if (tx.meta?.err) return;
-
-  const jupyterIxs = JUPYTER_IX_PARSER.parseTransactionData(
-    tx.transaction.message,
-    tx.meta.loadedAddresses
-  );
-
-  const parsedIxs = jupyterIxs.filter((ix) =>
-    ix.programId.equals(JUPYTER_PROGRAM_ID)
-  );
-
-  if (parsedIxs.length === 0) return;
-  // const jupyterEvents = JUPYTER_EVENT_PARSER.parseEvent(tx);
-  const result = { instructions: parsedIxs };
-  bnLayoutFormatter(result);
-  return result;
 }
